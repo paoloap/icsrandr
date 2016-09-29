@@ -1,0 +1,85 @@
+#!/bin/bash
+
+# Second display position (default is "above")
+position="above"
+if [[ "$1" == "right" ]]; then
+  position="right-of"
+elif [[ "$1" == "left" ]]; then
+  position="left-of"
+elif [[ "$1" == "right" ]]; then
+  position="below"
+fi
+
+sound=true
+xrandr=`xrandr`
+
+# Get the interface of the second display connected (if there is one)
+interface="$(echo "$xrandr" | sed -r 's/^[ ]*//' | grep "^[A-Z]*[1-9] connected" | grep  -v "^LVDS1" | cut -d' ' -f1)"
+
+# $interface is not empty only if there's a second connected display
+if [[ ! -z  "$interface" ]]; then
+
+  # If "--no-sound" is selected, or second display's interface is not HDMI, don't try to set HDMI sound
+  if [[ ( "$1" == "--no-sound" ) || ( "$2" == "--no-sound" ) || ( ! "$interface" == "HDMI"? ) ]]; then
+    sound=false
+  fi
+  selected="$(echo "$xrandr" | grep -A3 "$interface" | grep -v "$interface")"
+
+  # Check if main resolution is interpolated
+  interpolated="$(echo "$selected" | head -1 | grep "[0-9]*x[0-9]*i")"
+
+  # If main resolution is interpolated, exclude it, and set $resolution to the first
+  # non-interpolated resolution available.
+  if [[ ! -z "$interpolated" ]]; then
+    excluded="$(echo "$interpolated | sed -r 's/[ ]*([0-9]+x[0-9]+)i.*/\1/'")"
+    resolution="$(echo "$selected" | grep -v "^$excluded" | head -1 | sed -r 's/[ ]*([0-9]*x[0-9]*).*/\1/')"
+  # ...Else, take the first resolution in the list.
+  else
+    resolution="$(echo "$selected" | head -1 | sed -r 's/[ ]*([0-9]*x[0-9]*).*/\1/')"
+  fi
+  
+  # Set second display's position and resolution
+  xrandr --output "$interface" --mode "$resolution" --"$position" LVDS1
+
+  # On the conditions valued before, activate HDMI sound source
+  if $sound ; then
+    hdmi_sound_toggle
+  fi
+
+  # Wait 2 seconds and restart Awesome WM
+  # IF YOU DON'T ADOPT AWESOME WM DELETE THIS LINE
+  sleep 2; echo -e 'awesome.restart()' | awesome-client
+
+  displaytype="$(echo "$interface" | sed -r 's/([A-Z]*).*/\1/')"
+
+  # Check every 2 seconds if second display is disconnected. If yes, come back to previous configuration
+  while true; do
+    sleep 2
+    if [[ `cat /sys/class/drm/card0/*"$displaytype"*/status` == "disconnected" ]]; then
+      xrandr --auto
+      if [[ ( "$interface" == "HDMI"? ) && ( $sound ) ]]; then
+	hdmi_sound_toggle
+      fi
+      exit 0
+    fi
+  done
+else
+  exit 0
+fi
+
+# Toggle HDMI sound function
+hdmi_sound_toggle() {
+  USER_NAME=`who | grep "(:0)" | cut -d' ' -f1`
+  USER_ID=`id -u $USER_NAME`
+  HDMI_STATUS=`cat /sys/class/drm/card0/*HDMI*/status`
+
+  export PULSE_SERVER="unix:/run/user/"$USER_ID"/pulse/native"
+
+  if [[ "$HDMI_STATUS" == "connected" ]]; then
+    sudo -u $USER_NAME pactl --server $PULSE_SERVER set-card-profile 0 output:hdmi-stereo+input:analog-stereo
+    xrandr --auto &
+  else
+    sudo -u $USER_NAME pactl --server $PULSE_SERVER set-card-profile 0 output:analog-stereo+input:analog-stereo
+    xrandr --auto &
+  fi
+}
