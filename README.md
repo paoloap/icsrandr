@@ -6,7 +6,9 @@ icsrandr [left|right|below] [--no-sound]
 A simple bash script to automatically manage "xrandr" stuff.
 If you launch it when you connect a second display, it automatically provide to extend desktop (this is not to clone, but to extend).
 
-The default behaviour extend the new space above the original display, but you can append "right" or "left" or "below" arguments to extend in another way:
+The default behaviour extend the new space above the original display, but you can append "right" or "left" or "below" arguments to extend in another way.
+
+The script *ignores* interpolated resolutions (like 1080i) because I simply hate them (I have a 720p TV at home with this option...).
 
 The script automatically manages HDMI sound (NOTE: YOU MUST HAVE pulseaudio INSTALLED!), unless you add the --no-sound argument: in this case it doesn't do anything related to sound.
 
